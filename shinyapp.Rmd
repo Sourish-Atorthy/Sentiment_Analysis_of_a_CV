@@ -1,0 +1,263 @@
+---
+title: "Sentiment_Analysis_of_a_CV"
+author: "Sourish Atorthy"
+date: "2022-09-29"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+library(pdftools)
+
+library(tm)
+library(textstem)
+library(hunspell)
+library(stringr)
+
+library(wordcloud)
+library("RColorBrewer")
+
+library(ggplot2)
+library(ggthemes)
+
+library(qdap)
+library(utils)
+
+library(tidytext)
+library(syuzhet)
+library(lubridate)
+library(scales)
+library(reshape2)
+```
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  textInput("f_name","Enter your first name","First Name..."),
+  textInput("l_name","Enter your last name","Last Name..."),
+  fileInput
+  (
+    "file",
+    "Upload the CV in *.pdf file format",
+    buttonLabel = "Browse...",
+    placeholder = "No file selected"
+  )
+)
+
+renderUI({
+  print("Please wait for a minute after uploading the file. Sentiment Analysis takes time.")
+})
+
+renderUI({
+  file1 = input$file
+  if(is.null(file1)){return()}
+  if (file1$type != "application/pdf"){return()}
+  
+  data = lapply(file1$datapath, pdf_text)
+  if(is.null(data())){return()}
+  
+  data <- str_replace_all(string = data, pattern = "@gmail.com", replacement = "")
+  data <- str_replace_all(string = data, pattern = "[–-]", replacement = "")
+  data <- str_replace_all(data, "[[:punct:]]", "")
+  
+  corp <- Corpus(VectorSource(data))
+  tdm <- TermDocumentMatrix(corp)
+  fname = tolower(input$f_name)
+  lname = tolower(input$l_name)
+  custom_stopwords <- c(stopwords('english'),fname,lname,"years","institute","professional","experience","academic","qualifications","achievements","certifications","projects","positions","responsibility","extracurricular","n")
+
+  clean.corpus<- function (corp) {
+    corp <- tm_map(corp,content_transformer(tolower))
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removePunctuation)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removeNumbers)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, stripWhitespace)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, lemmatize_strings)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    return(corp)
+  }
+
+  corp=clean.corpus(corp)
+  tdm <- TermDocumentMatrix(corp)
+
+  output$plot <- renderPlot({
+    #wordcloud
+    m = as.matrix(tdm) # converts tdm which is list into matrix, typeof function to view     datastructure
+    v = sort(rowSums(m),decreasing = TRUE) # in order to sort based on frequency, we retrive the frequencies first using- rowsums function 
+    d = data.frame(word = names(v),freq =v) # converting v into a dataframe with headings word and freq
+  
+    wordcloud(words = d$word, freq = d$freq, min.freq = 3, max.words=100, random.order=FALSE, scale=c(3,0.4), rot.per=0, fixed.asp=FALSE, colors=brewer.pal(8, "Dark2"))
+  })
+})
+
+inputPanel(
+  textInput("color1","Enter color for frequency visualization","white")
+)
+
+renderUI({
+  file1 = input$file
+  if(is.null(file1)){return()}
+  if (file1$type != "application/pdf"){return()}
+  
+  data = lapply(file1$datapath, pdf_text)
+  if(is.null(data())){return()}
+  
+  data <- str_replace_all(string = data, pattern = "@gmail.com", replacement = "")
+  data <- str_replace_all(string = data, pattern = "[–-]", replacement = "")
+  data <- str_replace_all(data, "[[:punct:]]", "")
+  
+  corp <- Corpus(VectorSource(data))
+  tdm <- TermDocumentMatrix(corp)
+  fname = tolower(input$f_name)
+  lname = tolower(input$l_name)
+  custom_stopwords <- c(stopwords('english'),fname,lname,"years","institute","professional","experience","academic","qualifications","achievements","certifications","projects","positions","responsibility","extracurricular","n")
+
+  clean.corpus<- function (corp) {
+    corp <- tm_map(corp,content_transformer(tolower))
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removePunctuation)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removeNumbers)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, stripWhitespace)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, lemmatize_strings)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    return(corp)
+  }
+
+  corp=clean.corpus(corp)
+  tdm <- TermDocumentMatrix(corp)
+  
+  output$plot <- renderPlot({
+    #visualization
+    
+    tdm.m<-as.matrix(tdm)
+    term.freq<-rowSums(tdm.m)
+    freq.df<-data.frame(word=names(term.freq),frequency=term.freq)
+    freq.df<-freq.df[order(freq.df[,2], decreasing=T),]
+
+    #Plot Bar chart for frequencies
+    freq.df$word<-factor(freq.df$word,levels=unique(as.character(freq.df$word)))
+    ggplot(freq.df[1:20,], aes(x=word,y=frequency))+
+      geom_bar(stat="identity", fill='darkred')+
+      coord_flip()+
+      theme_gdocs()+
+      geom_text(aes(label=frequency), colour=input$color1,hjust=1.25, size=5.0)
+  })
+})
+
+inputPanel(
+  textInput("color2","Enter color for polarity visualization","blue")
+)
+
+renderUI({
+  file1 = input$file
+  if(is.null(file1)){return()}
+  if (file1$type != "application/pdf"){return()}
+  
+  data = lapply(file1$datapath, pdf_text)
+  if(is.null(data())){return()}
+  
+  data <- str_replace_all(string = data, pattern = "@gmail.com", replacement = "")
+  data <- str_replace_all(string = data, pattern = "[–-]", replacement = "")
+  data <- str_replace_all(data, "[[:punct:]]", "")
+  
+  corp <- Corpus(VectorSource(data))
+  tdm <- TermDocumentMatrix(corp)
+  fname = tolower(input$f_name)
+  lname = tolower(input$l_name)
+  custom_stopwords <- c(stopwords('english'),fname,lname,"years","institute","professional","experience","academic","qualifications","achievements","certifications","projects","positions","responsibility","extracurricular","n")
+
+  clean.corpus<- function (corp) {
+    corp <- tm_map(corp,content_transformer(tolower))
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removePunctuation)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removeNumbers)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, stripWhitespace)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, lemmatize_strings)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    return(corp)
+  }
+
+  corp=clean.corpus(corp)
+  tdm <- TermDocumentMatrix(corp)
+  
+  output$plot <- renderPlot({
+    #obtain list containing polarity
+    data_df <- tidy(tdm)
+    pol<-polarity(data_df)
+    
+    #get a histogram to show distribution of polarity scores
+    ggplot(pol$all, aes(x=polarity, y=..density..)) + theme_gdocs() + 
+      geom_histogram(binwidth=.25,
+      fill="darkred",colour=input$color2, size=.2) +
+      geom_density(size=.75)
+  })
+})
+
+renderUI({
+  file1 = input$file
+  if(is.null(file1)){return()}
+  if (file1$type != "application/pdf"){return()}
+  
+  data = lapply(file1$datapath, pdf_text)
+  if(is.null(data())){return()}
+  
+  data <- str_replace_all(string = data, pattern = "@gmail.com", replacement = "")
+  data <- str_replace_all(string = data, pattern = "[–-]", replacement = "")
+  data <- str_replace_all(data, "[[:punct:]]", "")
+  
+  corp <- Corpus(VectorSource(data))
+  tdm <- TermDocumentMatrix(corp)
+  fname = tolower(input$f_name)
+  lname = tolower(input$l_name)
+  custom_stopwords <- c(stopwords('english'),fname,lname,"years","institute","professional","experience","academic","qualifications","achievements","certifications","projects","positions","responsibility","extracurricular","n")
+
+  clean.corpus<- function (corp) {
+    corp <- tm_map(corp,content_transformer(tolower))
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removePunctuation)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, removeNumbers)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, stripWhitespace)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    corp <- tm_map(corp, lemmatize_strings)
+    corp <- tm_map(corp, removeWords,custom_stopwords)
+    return(corp)
+  }
+
+  corp=clean.corpus(corp)
+  dtm <- DocumentTermMatrix(corp)
+  
+  # data_tidy = tidy(dtm)
+  # print(data_tidy)
+  
+  output$plot <- renderPlot({
+
+    data_tidy = tidy(dtm)
+    
+    # give column headings
+    colnames(data_tidy)<-c('line_number','word','count')
+
+    # convert the first column to number for timeline wise analysis
+    data_tidy$line_number<-as.numeric(data_tidy$line_number)
+
+    s <- get_nrc_sentiment(data_tidy$word)
+    barplot(colSums(s),
+        las = 2,
+        col = rainbow(10),
+        ylab = 'Count',
+        main = 'Sentiment Scores')
+  })
+})
+
+```
